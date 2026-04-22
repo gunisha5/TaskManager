@@ -1,3 +1,10 @@
+## Live Demo
+
+Frontend: https://your-frontend.onrender.com  
+Backend: https://your-backend.onrender.com  
+
+Note: Initial load may take ~30 seconds due to free-tier cold start.
+
 # Personal Task Manager API
 
 Backend API for a personal task manager with JWT authentication, user-isolated data access, task filtering, and tag management.
