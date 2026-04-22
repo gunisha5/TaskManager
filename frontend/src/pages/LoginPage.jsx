@@ -55,7 +55,7 @@ const LoginPage = () => {
               <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
-          <span className="auth-logo__name">TaskManagerr</span>
+          <span className="auth-logo__name">TaskManager</span>
         </div>
 
         <h1 className="auth-heading">Welcome back</h1>
