@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { taskService } from '../services/taskService';
+import { getAiSuggestions } from '../api/aiApi';
 
 const IconClose = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -22,6 +23,8 @@ const TaskModal = ({ isOpen, onClose, onSuccess, initialData = null }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   // Hydrate form when editing
   useEffect(() => {
@@ -48,6 +51,7 @@ const TaskModal = ({ isOpen, onClose, onSuccess, initialData = null }) => {
       }
       setError('');
       setValidationError('');
+      setAiError('');
     }
   }, [isOpen, initialData]);
 
@@ -57,6 +61,42 @@ const TaskModal = ({ isOpen, onClose, onSuccess, initialData = null }) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     if (validationError && name === 'title') setValidationError('');
+    if (aiError && name === 'title') setAiError('');
+  };
+
+  const handleSmartSuggest = async () => {
+    if (!form.title.trim()) {
+      setAiError('Please enter a title first to get suggestions.');
+      return;
+    }
+    setAiLoading(true);
+    setAiError('');
+
+    try {
+      const res = await getAiSuggestions(form.title.trim());
+      const { tags, subtasks } = res.data.data;
+
+      setForm((prev) => {
+        let newTags = prev.tags;
+        if (tags && tags.length > 0) {
+          const existingTags = prev.tags.split(',').map(t => t.trim()).filter(Boolean);
+          const uniqueTags = [...new Set([...existingTags, ...tags])];
+          newTags = uniqueTags.join(', ');
+        }
+
+        let newDesc = prev.description;
+        if (subtasks && subtasks.length > 0) {
+          const subtasksText = '\n\nSuggested Subtasks:\n' + subtasks.map(st => `- [ ] ${st}`).join('\n');
+          newDesc = (prev.description + subtasksText).trim();
+        }
+
+        return { ...prev, tags: newTags, description: newDesc };
+      });
+    } catch (err) {
+      setAiError('Failed to generate suggestions. Please try again.');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -123,9 +163,24 @@ const TaskModal = ({ isOpen, onClose, onSuccess, initialData = null }) => {
           )}
 
           <form id="task-form" className="form" onSubmit={handleSubmit}>
+            {aiError && (
+              <div className="form-error" style={{ marginBottom: '1rem' }}>{aiError}</div>
+            )}
+
             {/* Title */}
             <div className="form-group">
-              <label className="form-label" htmlFor="task-title">Title *</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label className="form-label" htmlFor="task-title" style={{ marginBottom: 0 }}>Title *</label>
+                <button 
+                  type="button" 
+                  onClick={handleSmartSuggest} 
+                  className="btn btn--ghost" 
+                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', height: 'auto', width: 'auto', color: 'var(--color-primary)' }}
+                  disabled={aiLoading}
+                >
+                  {aiLoading ? 'Thinking...' : 'Smart Suggest ✨'}
+                </button>
+              </div>
               <input
                 id="task-title"
                 name="title"

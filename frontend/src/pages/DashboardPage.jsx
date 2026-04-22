@@ -3,7 +3,10 @@ import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import TaskModal from '../components/TaskModal';
 import useTasks from '../hooks/useTasks';
+import useTags from '../hooks/useTags';
+import useDebounce from '../hooks/useDebounce';
 import { taskService } from '../services/taskService';
+import { tagService } from '../services/tagService';
 
 // ── Inline SVG icons ─────────────────────────────────────────────────────────
 const IconPlus = () => (
@@ -269,15 +272,12 @@ const TaskGroup = ({ group, tasks, onEdit, onDelete, onToggleDone }) => {
 };
 
 // ── Main task content (live data) ─────────────────────────────────────────────
-const TaskContent = ({ search }) => {
-  const { tasks, loading, error, refetch, setTasks } = useTasks();
+const TaskContent = ({ filters }) => {
+  const { tasks, loading, error, refetch, setTasks } = useTasks(filters);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  // Client-side search filter (server-side filtering added later)
-  const filtered = search
-    ? tasks.filter((t) => t.title.toLowerCase().includes(search.toLowerCase()))
-    : tasks;
+  const hasFilters = Object.values(filters).some((val) => !!val);
 
   const handleAddTask = () => {
     setEditingTask(null);
@@ -331,8 +331,8 @@ const TaskContent = ({ search }) => {
       {/* Header */}
       <div className="task-section__header">
         <div>
-          <span className="task-section__heading">My Tasks</span>
-          <span className="task-section__count">{filtered.length}</span>
+          <span className="task-section__heading">{filters.tags ? `Tag: ${filters.tags}` : 'My Tasks'}</span>
+          <span className="task-section__count">{tasks.length}</span>
         </div>
         <button id="btn-add-task" className="btn--add-task" onClick={handleAddTask}>
           <IconPlus />
@@ -341,29 +341,35 @@ const TaskContent = ({ search }) => {
       </div>
 
       {/* Empty state */}
-      {filtered.length === 0 && !loading && (
-        search
+      {tasks.length === 0 && !loading && (
+        hasFilters
           ? (
             <div className="empty-state">
               <div className="empty-state__icon"><IconClipboard /></div>
-              <p className="empty-state__title">No results for &quot;{search}&quot;</p>
-              <p className="empty-state__desc">Try a different search term.</p>
+              <p className="empty-state__title">No results found</p>
+              <p className="empty-state__desc">Try adjusting your search or filters.</p>
             </div>
           )
           : <EmptyState onAdd={handleAddTask} />
       )}
 
       {/* Task groups */}
-      {filtered.length > 0 && STATUS_GROUPS.map((group) => (
-        <TaskGroup
-          key={group.key}
-          group={group}
-          tasks={filtered.filter((t) => t.status === group.key)}
-          onEdit={handleEditTask}
-          onDelete={handleDeleteTask}
-          onToggleDone={handleToggleDone}
-        />
-      ))}
+      {tasks.length > 0 && STATUS_GROUPS.map((group) => {
+        const groupTasks = tasks.filter((t) => t.status === group.key);
+        // If a status filter is applied, only render the matching group
+        if (filters.status && filters.status !== group.key) return null;
+        
+        return (
+          <TaskGroup
+            key={group.key}
+            group={group}
+            tasks={groupTasks}
+            onEdit={handleEditTask}
+            onDelete={handleDeleteTask}
+            onToggleDone={handleToggleDone}
+          />
+        );
+      })}
       
       <TaskModal 
         isOpen={isModalOpen}
@@ -375,10 +381,114 @@ const TaskContent = ({ search }) => {
   );
 };
 
+// ── Manage Tags Content ───────────────────────────────────────────────────────
+const ManageTagsContent = () => {
+  const { tags, loading, error, refetch, setTags } = useTags();
+  const [newTag, setNewTag] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCreateTag = async (e) => {
+    e.preventDefault();
+    if (!newTag.trim()) return;
+
+    setIsSubmitting(true);
+    // Optimistic update
+    const tempTag = { _id: Date.now().toString(), name: newTag.trim() };
+    setTags((prev) => [...prev, tempTag]);
+    setNewTag('');
+
+    try {
+      await tagService.create({ name: tempTag.name });
+      refetch(); // Get real ID
+    } catch (err) {
+      setTags((prev) => prev.filter((t) => t._id !== tempTag._id));
+      alert('Failed to create tag.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteTag = async (tag) => {
+    if (!window.confirm(`Delete tag "${tag.name}"?`)) return;
+
+    setTags((prev) => prev.filter((t) => t._id !== tag._id));
+    
+    try {
+      await tagService.delete(tag._id);
+    } catch (err) {
+      refetch();
+      alert('Failed to delete tag.');
+    }
+  };
+
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState message={error} onRetry={refetch} />;
+
+  return (
+    <div className="task-section">
+      <div className="task-section__header">
+        <span className="task-section__heading">Manage Tags</span>
+      </div>
+
+      <div style={{ maxWidth: 500, marginTop: '1rem' }}>
+        <form onSubmit={handleCreateTag} style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem' }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Add new tag..."
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            disabled={isSubmitting}
+          />
+          <button type="submit" className="btn btn--primary" disabled={isSubmitting || !newTag.trim()} style={{ width: 'auto' }}>
+            Add
+          </button>
+        </form>
+
+        <div className="task-list">
+          {tags.length === 0 ? (
+            <div className="empty-state">
+              <p className="empty-state__title">No tags yet</p>
+            </div>
+          ) : (
+            tags.map((tag) => (
+              <div key={tag._id} className="task-row">
+                <span className="task-row__title" style={{ marginLeft: 0 }}>{tag.name}</span>
+                <div className="task-row__actions">
+                  <button
+                    className="task-row__action-btn"
+                    title="Delete tag"
+                    onClick={() => handleDeleteTag(tag)}
+                  >
+                    <IconTrash />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Dashboard Page ────────────────────────────────────────────────────────────
 const DashboardPage = () => {
   const [activeView, setActiveView] = useState('my-tasks');
   const [search, setSearch]         = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
+  const debouncedSearch = useDebounce(search, 300);
+  
+  const isTagView = activeView.startsWith('tag:');
+  
+  const filters = {
+    search: debouncedSearch,
+    priority: priorityFilter || undefined,
+    status: statusFilter || undefined,
+    tags: isTagView ? activeView.slice(4) : undefined,
+  };
 
   return (
     <div className="app-shell">
@@ -392,9 +502,30 @@ const DashboardPage = () => {
         />
 
         <main className="content-area">
-          {activeView === 'my-tasks' && <TaskContent search={search} />}
+          {(activeView === 'my-tasks' || isTagView) && (
+            <>
+              {/* Inline Filter Bar */}
+              <div className="filter-bar" style={{ display: 'flex', gap: '0.75rem', padding: '0 2rem 1rem', borderBottom: '1px solid var(--color-border)', marginBottom: '1rem' }}>
+                <select className="form-input" style={{ width: 'auto', padding: '0.3rem 2rem 0.3rem 0.8rem', fontSize: 'var(--font-size-sm)' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="">All Statuses</option>
+                  <option value="todo">To Do</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+                <select className="form-input" style={{ width: 'auto', padding: '0.3rem 2rem 0.3rem 0.8rem', fontSize: 'var(--font-size-sm)' }} value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                  <option value="">All Priorities</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <TaskContent filters={filters} />
+            </>
+          )}
 
-          {activeView !== 'my-tasks' && (
+          {activeView === 'tags' && <ManageTagsContent />}
+
+          {activeView !== 'my-tasks' && activeView !== 'tags' && !isTagView && (
             <div className="task-section">
               <div className="empty-state" style={{ marginTop: '2rem' }}>
                 <div className="empty-state__icon"><IconClipboard /></div>

@@ -1,4 +1,5 @@
 import { useAuth } from '../context/AuthContext';
+import useTags from '../hooks/useTags';
 
 // Inline SVG icons
 const IconLayers = () => (
@@ -32,17 +33,12 @@ const IconLogOut = () => (
   </svg>
 );
 
-// Placeholder tag colors
+// Preset tag colors
 const TAG_COLORS = ['#5b5bd6', '#30a46c', '#f76b15', '#e5484d', '#8e4ec6'];
-
-const PLACEHOLDER_TAGS = [
-  { _id: 't1', name: 'Frontend', color: TAG_COLORS[0] },
-  { _id: 't2', name: 'Backend',  color: TAG_COLORS[1] },
-  { _id: 't3', name: 'Design',   color: TAG_COLORS[2] },
-];
 
 const Sidebar = ({ activeView, onViewChange }) => {
   const { user, logout } = useAuth();
+  const { tags } = useTags();
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -87,17 +83,20 @@ const Sidebar = ({ activeView, onViewChange }) => {
       {/* Tags section */}
       <span className="sidebar__section-label">Tags</span>
 
-      {PLACEHOLDER_TAGS.map((tag) => (
-        <button
-          key={tag._id}
-          id={`nav-tag-${tag._id}`}
-          className="sidebar__nav-item"
-          onClick={() => onViewChange(`tag:${tag._id}`)}
-        >
-          <span className="sidebar__tag-dot" style={{ background: tag.color }} />
-          {tag.name}
-        </button>
-      ))}
+      {tags.map((tag, index) => {
+        const color = TAG_COLORS[index % TAG_COLORS.length];
+        return (
+          <button
+            key={tag._id}
+            id={`nav-tag-${tag._id}`}
+            className={`sidebar__nav-item${activeView === `tag:${tag.name}` ? ' active' : ''}`}
+            onClick={() => onViewChange(`tag:${tag.name}`)}
+          >
+            <span className="sidebar__tag-dot" style={{ background: color }} />
+            {tag.name}
+          </button>
+        );
+      })}
 
       <button
         id="nav-manage-tags"

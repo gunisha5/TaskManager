@@ -261,6 +261,7 @@ img, svg { display: block; }
   background: var(--color-accent);
   color: #fff;
   width: 100%;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 1px 2px rgba(0,0,0,0.2);
 }
 .btn--primary:hover:not(:disabled) { background: var(--color-accent-hover); }
 
@@ -528,7 +529,7 @@ textarea.form-input {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-base);
   user-select: none;
   white-space: nowrap;
 }
@@ -536,6 +537,7 @@ textarea.form-input {
 .sidebar__nav-item:hover {
   background: var(--color-surface-2);
   color: var(--color-text-primary);
+  transform: translateX(2px);
 }
 
 .sidebar__nav-item.active {
@@ -874,12 +876,15 @@ textarea.form-input {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-base);
   min-height: 44px;
 }
 
 .task-row:last-child { border-bottom: none; }
-.task-row:hover { background: var(--color-surface-2); }
+.task-row:hover { 
+  background: var(--color-surface-2); 
+  transform: translateX(2px);
+}
 
 .task-row__priority {
   width: 10px;
@@ -973,12 +978,13 @@ textarea.form-input {
   display: grid;
   place-items: center;
   color: var(--color-text-muted);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
 }
 
 .task-row__action-btn:hover {
   background: var(--color-border);
   color: var(--color-text-primary);
+  transform: scale(1.1);
 }
 
 .task-row__action-btn svg { width: 13px; height: 13px; }
