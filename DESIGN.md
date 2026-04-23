@@ -1,95 +1,26 @@
-# DESIGN
+# System Design & Architecture
 
-## Overview
+## Data Model & Reasoning
+The application uses a NoSQL document database (MongoDB) with Mongoose for schema definition. The data model is kept deliberately flat to optimize for fast, independent document retrieval.
+* **User**: Stores authentication credentials (`email`, hashed `password`) and basic profile info.
+* **Task**: The core entity. Instead of using complex joins, `tags` are stored as an array of strings directly on the document. This denormalization optimizes read performance, as fetching a user's task list requires no additional lookups for tag resolution.
+* **Tag**: A lightweight entity storing global tag definitions for a specific user. This exists purely to populate the sidebar and "Manage Tags" page UI, acting independently from the string-based tags on the `Task` documents.
 
-This backend is designed around clean layering:
+## Indexes Added & Why
+To maintain rapid query performance as the collection grows, the following indexes are configured:
+* **User (`email: 1, unique: true`)**: Ensures O(1) lookup during authentication and prevents duplicate account creation.
+* **Task (`userId: 1`)**: The most critical index. Every task query is filtered by user; this index ensures we only scan documents belonging to the authenticated tenant.
+* **Task (`title: 1`) & (`title: "text"`)**: Supports the frontend search functionality. The text index allows for efficient partial text matching without executing full collection scans.
+* **Tag (`userId: 1`)**: Ensures fast retrieval of a user's tag list for the sidebar.
 
-- Routes define endpoints and attach middleware.
-- Controllers handle HTTP request/response only.
-- Services encapsulate business and database logic.
-- Models define MongoDB schemas and indexes.
+## Data Isolation Between Users
+Data isolation is strictly enforced at the service layer using a mandatory `userId` filter.
+1. The `authMiddleware` validates the stateless JWT and injects the `req.user.userId` into the request object.
+2. Every business logic method (e.g., `taskService.listTasks`, `taskService.updateTask`) inherently requires `userId` as its primary argument.
+3. Database queries explicitly scope the operation (e.g., `Task.findOneAndUpdate({ _id: taskId, userId })`). This guarantees that even if a malicious actor guesses a valid Task Object ID, the query will return null unless the authenticated user actually owns that document.
 
-This separation keeps code maintainable as features grow.
+## Scaling to 100,000 Active Users
+At 100k active users, **the `GET /api/tasks` endpoint will break first.** Currently, the API fetches all of a user's tasks into memory without pagination. As users accumulate hundreds of tasks over time, this will lead to massive payload sizes, severe Node.js memory pressure (garbage collection pauses), and excessive MongoDB query times. To fix this, I would immediately implement cursor-based pagination (or limit/offset) on the backend, alongside an infinite scroll or paginated view on the frontend. Additionally, I would introduce a Redis caching layer for the `GET /api/tags` endpoint, as tags are read frequently but mutated rarely.
 
-## DB Schema Reasoning
-
-### User
-
-- Fields: `name`, `email`, `password`, timestamps.
-- `email` is unique and indexed for fast login checks.
-- `password` stores only hashed values.
-
-### Task
-
-- Fields: `title`, `description`, `dueDate`, `priority`, `status`, `tags`, `userId`, timestamps.
-- `userId` links each task to a single owner.
-- `priority` and `status` enums enforce controlled states.
-- `tags` as string array gives simple filtering and quick iteration.
-
-### Tag
-
-- Fields: `name`, `userId`, timestamps.
-- `userId` ensures each tag is user-scoped.
-- Tag deletion removes references from that user's tasks, not tasks themselves.
-
-## Indexing Strategy
-
-Current indexes:
-
-- User:
-  - `email` unique index
-- Task:
-  - `userId` index
-  - `title` index
-  - text index on `title`
-- Tag:
-  - `userId` index
-
-Why:
-
-- `userId` indexes support fast per-user filtering and isolation.
-- `title` indexes support search operations.
-- unique user email supports fast auth and uniqueness guarantees.
-
-For growth, consider compound indexes:
-
-- `{ userId: 1, status: 1 }`
-- `{ userId: 1, priority: 1 }`
-- `{ userId: 1, dueDate: 1 }`
-
-## Data Isolation Logic
-
-Isolation is enforced in three layers:
-
-1. JWT auth middleware verifies token and attaches `req.user.userId`.
-2. Services always scope queries with `userId`.
-3. Update/delete by ID always use `{ _id, userId }`.
-
-Result:
-
-- users can read only their own tasks and tags.
-- users cannot update/delete other users' records even with valid IDs.
-
-## Scaling Challenges (100k users)
-
-Primary challenges:
-
-1. Hot query patterns (list/filter/search tasks) under high concurrency.
-2. Regex search cost on large task collections.
-3. Increasing write load from frequent task updates.
-4. Background cleanup or analytics competing with API workload.
-
-Mitigations:
-
-- Add compound indexes for common filters.
-- Prefer text or Atlas Search for high-scale search relevance/performance.
-- Add pagination and field projections to reduce payload size.
-- Introduce Redis caching for common reads (optional).
-- Use read replicas and connection tuning as traffic grows.
-- Add structured logging and metrics for query latency and error rates.
-
-## Future Improvements
-
-- Tag model evolution: migrate tasks to store tag IDs for stronger referential integrity.
-- Token strategy: introduce refresh token flow and token revocation list.
-- Testing: add integration tests for auth, isolation, and filtering behavior.
+## Feature Deliberately Left Out (Next Day Addition)
+**Real-time Synchronization (WebSockets).** Currently, if a user has the app open on their phone and laptop simultaneously, checking off a task on the phone won't update the laptop until the page is refreshed. With another day, I would integrate `Socket.io` to broadcast `task:updated` and `task:created` events specific to a user's room. This would make the application feel truly magical, responsive, and seamlessly synced across all their devices in real-time.
