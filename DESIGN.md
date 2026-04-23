@@ -1,26 +1,28 @@
-# System Design & Architecture
+# TaskManagerr Design Document
 
-## Data Model & Reasoning
-The application uses a NoSQL document database (MongoDB) with Mongoose for schema definition. The data model is kept deliberately flat to optimize for fast, independent document retrieval.
-* **User**: Stores authentication credentials (`email`, hashed `password`) and basic profile info.
-* **Task**: The core entity. Instead of using complex joins, `tags` are stored as an array of strings directly on the document. This denormalization optimizes read performance, as fetching a user's task list requires no additional lookups for tag resolution.
-* **Tag**: A lightweight entity storing global tag definitions for a specific user. This exists purely to populate the sidebar and "Manage Tags" page UI, acting independently from the string-based tags on the `Task` documents.
+## Data Model
+The application uses **MongoDB** with **Mongoose** as the ODM. The schema is designed for a multi-tenant task management system.
 
-## Indexes Added & Why
-To maintain rapid query performance as the collection grows, the following indexes are configured:
-* **User (`email: 1, unique: true`)**: Ensures O(1) lookup during authentication and prevents duplicate account creation.
-* **Task (`userId: 1`)**: The most critical index. Every task query is filtered by user; this index ensures we only scan documents belonging to the authenticated tenant.
-* **Task (`title: 1`) & (`title: "text"`)**: Supports the frontend search functionality. The text index allows for efficient partial text matching without executing full collection scans.
-* **Tag (`userId: 1`)**: Ensures fast retrieval of a user's tag list for the sidebar.
+### Key Collections:
+- **Users**: Stores authentication details (email, hashed password). Uses email as the unique identifier.
+- **Tasks**: The core entity. Each task belongs to a user and contains metadata like title, status (todo, in-progress, done), priority, and tags.
+  - *Note on Subtasks*: Subtasks are currently stored as Markdown-style text within the `description` field and parsed dynamically on the frontend. This avoids complex relational nesting and keeps the write operations simple.
+- **Tags**: A user-specific collection of custom tags. While tasks store tag names as a string array for performance, this collection provides a registry for user-defined categories.
 
-## Data Isolation Between Users
-Data isolation is strictly enforced at the service layer using a mandatory `userId` filter.
-1. The `authMiddleware` validates the stateless JWT and injects the `req.user.userId` into the request object.
-2. Every business logic method (e.g., `taskService.listTasks`, `taskService.updateTask`) inherently requires `userId` as its primary argument.
-3. Database queries explicitly scope the operation (e.g., `Task.findOneAndUpdate({ _id: taskId, userId })`). This guarantees that even if a malicious actor guesses a valid Task Object ID, the query will return null unless the authenticated user actually owns that document.
+## Indexes
+To ensure performant queries, the following indexes have been added:
+- **`User.email` (Unique)**: Critical for login lookups and enforcing unique accounts.
+- **`Task.userId`**: Every task query is scoped to a user. This index ensures that fetching a user's task list is $O(1)$ relative to the total database size.
+- **`Task.title` (Text Index)**: Enables efficient keyword searching across task titles.
+- **`Tag.userId`**: Ensures fast lookups for a user's tag registry.
 
-## Scaling to 100,000 Active Users
-At 100k active users, **the `GET /api/tasks` endpoint will break first.** Currently, the API fetches all of a user's tasks into memory without pagination. As users accumulate hundreds of tasks over time, this will lead to massive payload sizes, severe Node.js memory pressure (garbage collection pauses), and excessive MongoDB query times. To fix this, I would immediately implement cursor-based pagination (or limit/offset) on the backend, alongside an infinite scroll or paginated view on the frontend. Additionally, I would introduce a Redis caching layer for the `GET /api/tags` endpoint, as tags are read frequently but mutated rarely.
+## Data Isolation
+Data isolation is strictly enforced at two levels:
+1.  **Authentication Middleware**: Every request must include a valid JWT. The middleware decodes the token and attaches the `userId` to the request object.
+2.  **Service Layer Enforcement**: All database queries (find, update, delete) in the service layer explicitly include the `userId` in the filter (e.g., `Task.findOne({ _id: taskId, userId })`). This ensures a user can never access or modify data belonging to another ID, even if they guess a valid Task UUID.
 
-## Feature Deliberately Left Out (Next Day Addition)
-**Real-time Synchronization (WebSockets).** Currently, if a user has the app open on their phone and laptop simultaneously, checking off a task on the phone won't update the laptop until the page is refreshed. With another day, I would integrate `Socket.io` to broadcast `task:updated` and `task:created` events specific to a user's room. This would make the application feel truly magical, responsive, and seamlessly synced across all their devices in real-time.
+## Scalability at 100,000 Active Users
+At this scale, the primary bottleneck will be **database read/write contention** on the `Tasks` collection and **memory pressure** on the Node.js API instances. The current `listTasks` endpoint returns all user tasks at once, which will cause significant latency and bandwidth waste as users accumulate history. To handle this, I would implement **pagination (limit/skip or cursor-based)** immediately. Additionally, I would implement **database sharding by `userId`** to distribute the storage load and introduce a **Redis caching layer** for frequently accessed dashboard data to reduce expensive MongoDB aggregations.
+
+## Feature for "Another Day"
+**Team Collaboration & Shared Projects**: Currently, the app is strictly single-user. I would add a "Teams" entity that allows users to invite others to specific project folders. This would involve updating the `Task` schema to support a `projectId` and `sharedWith` array, as well as more complex RBAC (Role-Based Access Control) to distinguish between "Viewers" and "Editors".
