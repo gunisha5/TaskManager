@@ -1,4 +1,5 @@
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const IconSearch = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -12,6 +13,24 @@ const IconBell = () => (
   </svg>
 );
 
+const IconMenu = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M2 4h12M2 8h12M2 12h12" />
+  </svg>
+);
+
+const IconSun = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="8" cy="8" r="3"/><path d="M8 1v2m0 10v2M1 8h2m10 0h2M3 3l1.5 1.5M11.5 11.5 13 13M3 13l1.5-1.5M11.5 4.5 13 3"/>
+  </svg>
+);
+
+const IconMoon = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 9.5a6 6 0 1 1-5.5-5.5 4 4 0 0 0 5.5 5.5z"/>
+  </svg>
+);
+
 // Title map for views
 const VIEW_TITLES = {
   'my-tasks': 'My Tasks',
@@ -20,8 +39,9 @@ const VIEW_TITLES = {
   'settings': 'Settings',
 };
 
-const Topbar = ({ activeView, searchValue, onSearchChange }) => {
+const Topbar = ({ activeView, searchValue, onSearchChange, onMenuClick }) => {
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const title = VIEW_TITLES[activeView] || 'My Tasks';
 
@@ -31,6 +51,11 @@ const Topbar = ({ activeView, searchValue, onSearchChange }) => {
 
   return (
     <header className="topbar">
+      {/* Hamburger Menu (Mobile) */}
+      <button className="topbar__menu-btn" onClick={onMenuClick} aria-label="Toggle menu">
+        <IconMenu />
+      </button>
+
       {/* Page title */}
       <span className="topbar__title">{title}</span>
 
@@ -52,6 +77,14 @@ const Topbar = ({ activeView, searchValue, onSearchChange }) => {
 
       {/* Right actions */}
       <div className="topbar__actions">
+        <button 
+          id="topbar-theme-toggle" 
+          className="topbar__icon-btn" 
+          onClick={toggleTheme}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? <IconSun /> : <IconMoon />}
+        </button>
         <button id="topbar-notifications" className="topbar__icon-btn" title="Notifications">
           <IconBell />
         </button>

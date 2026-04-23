@@ -66,6 +66,16 @@ const isOverdue = (dateStr, status) => {
   return new Date(dateStr) < new Date();
 };
 
+const parseSubtasks = (description) => {
+  if (!description) return [];
+  return description
+    .split('\n')
+    .map(line => line.trim())
+    // Remove Markdown checkboxes, bullet points, and numbering
+    .map(line => line.replace(/^([-*]|\d+\.)?\s*\[[ xX]?\]\s*|^[-*]\s*|^\d+\.\s*/, ''))
+    .filter(line => line.length > 0);
+};
+
 // ── Loading skeleton ─────────────────────────────────────────────────────────
 const TaskRowSkeleton = () => (
   <div className="task-row" style={{ pointerEvents: 'none' }}>
@@ -146,77 +156,86 @@ const EmptyState = ({ onAdd }) => (
 );
 
 // ── Single task row ──────────────────────────────────────────────────────────
-const TaskRow = ({ task, onEdit, onDelete, onToggleDone }) => {
+const TaskRow = ({ task, onEdit, onDelete, onToggleDone, isExpanded, onToggleExpand }) => {
   const due = formatDue(task.dueDate);
   const overdue = isOverdue(task.dueDate, task.status);
+  const subtasks = parseSubtasks(task.description);
 
   return (
-    <div className="task-row" id={`task-row-${task._id}`}>
-      {/* Priority dot */}
-      <span
-        className={`task-row__priority task-row__priority--${task.priority}`}
-        title={`Priority: ${task.priority}`}
-      />
+    <div 
+      className={`task-row-container${isExpanded ? ' expanded' : ''}`}
+      onClick={() => onToggleExpand(task._id)}
+    >
+      <div className="task-row" id={`task-row-${task._id}`}>
+        <div className="task-row__header">
+          <span
+            className={`task-row__priority task-row__priority--${task.priority}`}
+            title={`Priority: ${task.priority}`}
+          />
+          <div className="task-row__content">
+            <span className={`task-row__title${task.status === 'done' ? ' task-row__title--done' : ''}`}>
+              {task.title}
+            </span>
+            {task.tags?.length > 0 && (
+              <div className="task-row__tags">
+                {task.tags.slice(0, 2).map((tag) => (
+                  <span key={tag} className="tag-badge">{tag}</span>
+                ))}
+                {task.tags.length > 2 && (
+                  <span className="tag-badge">+{task.tags.length - 2}</span>
+                )}
+              </div>
+            )}
+          </div>
+          <div 
+            className={`task-row__status${task.status === 'done' ? ' task-row__status--done' : ''}`} 
+            onClick={(e) => { e.stopPropagation(); onToggleDone(task); }}
+            title={task.status === 'done' ? 'Mark as to do' : 'Mark done'}
+          >
+            {task.status === 'done' && <IconCheck />}
+          </div>
+        </div>
 
-      {/* Status indicator */}
-      <div className={`task-row__status${task.status === 'done' ? ' task-row__status--done' : ''}`}>
-        {task.status === 'done' && <IconCheck />}
-      </div>
-
-      {/* Title */}
-      <span className={`task-row__title${task.status === 'done' ? ' task-row__title--done' : ''}`}>
-        {task.title}
-      </span>
-
-      {/* Tags */}
-      {task.tags?.length > 0 && (
-        <div className="task-row__tags">
-          {task.tags.slice(0, 2).map((tag) => (
-            <span key={tag} className="tag-badge">{tag}</span>
-          ))}
-          {task.tags.length > 2 && (
-            <span className="tag-badge">+{task.tags.length - 2}</span>
+        <div className="task-row__footer">
+          <div className="task-row__actions" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="task-row__action-btn"
+              title="Edit task"
+              onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+            >
+              <IconEdit />
+            </button>
+            <button
+              className="task-row__action-btn"
+              title="Delete task"
+              onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+            >
+              <IconTrash />
+            </button>
+          </div>
+          {due && (
+            <span className={`task-row__due${overdue ? ' task-row__due--overdue' : ''}`}>
+              {overdue ? '⚠ ' : ''}{due}
+            </span>
           )}
         </div>
-      )}
-
-      {/* Due date */}
-      {due && (
-        <span className={`task-row__due${overdue ? ' task-row__due--overdue' : ''}`}>
-          {overdue ? '⚠ ' : ''}{due}
-        </span>
-      )}
-
-      {/* Hover actions — wired in next step */}
-      <div className="task-row__actions">
-        <button
-          className="task-row__action-btn"
-          title={task.status === 'done' ? 'Mark as to do' : 'Mark done'}
-          onClick={(e) => { e.stopPropagation(); onToggleDone(task); }}
-        >
-          <IconCheck />
-        </button>
-        <button
-          className="task-row__action-btn"
-          title="Edit task"
-          onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-        >
-          <IconEdit />
-        </button>
-        <button
-          className="task-row__action-btn"
-          title="Delete task"
-          onClick={(e) => { e.stopPropagation(); onDelete(task); }}
-        >
-          <IconTrash />
-        </button>
       </div>
+
+      {isExpanded && subtasks.length > 0 && (
+        <div className="subtasks">
+          {subtasks.map((sub, idx) => (
+            <div key={idx} className="subtask">
+              • {sub}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
 
 // ── Status group (collapsible) ────────────────────────────────────────────────
-const TaskGroup = ({ group, tasks, onEdit, onDelete, onToggleDone }) => {
+const TaskGroup = ({ group, tasks, onEdit, onDelete, onToggleDone, expandedTaskId, onToggleExpand }) => {
   const [collapsed, setCollapsed] = useState(false);
   if (tasks.length === 0) return null;
 
@@ -263,6 +282,8 @@ const TaskGroup = ({ group, tasks, onEdit, onDelete, onToggleDone }) => {
               onEdit={onEdit} 
               onDelete={onDelete} 
               onToggleDone={onToggleDone} 
+              isExpanded={expandedTaskId === task._id}
+              onToggleExpand={onToggleExpand}
             />
           ))}
         </div>
@@ -276,8 +297,13 @@ const TaskContent = ({ filters }) => {
   const { tasks, loading, error, refetch, setTasks } = useTasks(filters);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
 
   const hasFilters = Object.values(filters).some((val) => !!val);
+
+  const handleToggleExpand = (id) => {
+    setExpandedTaskId((prev) => (prev === id ? null : id));
+  };
 
   const handleAddTask = () => {
     setEditingTask(null);
@@ -367,6 +393,8 @@ const TaskContent = ({ filters }) => {
             onEdit={handleEditTask}
             onDelete={handleDeleteTask}
             onToggleDone={handleToggleDone}
+            expandedTaskId={expandedTaskId}
+            onToggleExpand={handleToggleExpand}
           />
         );
       })}
@@ -478,6 +506,7 @@ const DashboardPage = () => {
   const [search, setSearch]         = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
   
@@ -490,15 +519,31 @@ const DashboardPage = () => {
     tags: isTagView ? activeView.slice(4) : undefined,
   };
 
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
   return (
     <div className="app-shell">
-      <Sidebar activeView={activeView} onViewChange={setActiveView} />
+      {/* Mobile Overlay */}
+      <div 
+        className={`sidebar-overlay${isSidebarOpen ? ' visible' : ''}`} 
+        onClick={() => setIsSidebarOpen(false)} 
+      />
+
+      <Sidebar 
+        activeView={activeView} 
+        onViewChange={(view) => {
+          setActiveView(view);
+          setIsSidebarOpen(false); // Close on mobile after selection
+        }} 
+        isOpen={isSidebarOpen}
+      />
 
       <div className="main-panel">
         <Topbar
           activeView={activeView}
           searchValue={search}
           onSearchChange={setSearch}
+          onMenuClick={toggleSidebar}
         />
 
         <main className="content-area">

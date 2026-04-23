@@ -36,7 +36,7 @@ const IconLogOut = () => (
 // Preset tag colors
 const TAG_COLORS = ['#5b5bd6', '#30a46c', '#f76b15', '#e5484d', '#8e4ec6'];
 
-const Sidebar = ({ activeView, onViewChange }) => {
+const Sidebar = ({ activeView, onViewChange, isOpen }) => {
   const { user, logout } = useAuth();
   const { tags } = useTags();
 
@@ -45,7 +45,7 @@ const Sidebar = ({ activeView, onViewChange }) => {
     : 'U';
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${isOpen ? ' open' : ''}`}>
       {/* Logo */}
       <div className="sidebar__logo">
         <div className="sidebar__logo-icon">
@@ -98,14 +98,7 @@ const Sidebar = ({ activeView, onViewChange }) => {
         );
       })}
 
-      <button
-        id="nav-manage-tags"
-        className="sidebar__nav-item"
-        onClick={() => onViewChange('tags')}
-      >
-        <IconTag />
-        Manage Tags
-      </button>
+
 
       <div className="sidebar__divider" />
 
