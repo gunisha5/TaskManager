@@ -1,27 +1,34 @@
+# TaskManager
+
 ## Live Demo
 
 Frontend: https://task-manager-delta-seven-64.vercel.app/login
+Backend: https://taskmanager-backend-ccya.onrender.com
 
-Backend: https://your-backend.onrender.com  
+**Note:** Initial backend response may take ~20–30 seconds due to free-tier cold start on Render.
 
-Note: Initial load may take ~30 seconds due to free-tier cold start.
+---
 
-# Personal Task Manager API
+## Overview
 
-Backend API for a personal task manager with JWT authentication, user-isolated data access, task filtering, and tag management.
+Personal Task Manager API with JWT authentication, user-isolated data access, task filtering, AI-powered suggestions, and tag management.
+
+---
 
 ## Tech Stack
 
-- Node.js
-- Express
-- MongoDB Atlas + Mongoose
-- JWT authentication
-- OpenRouter API (`axios`)
-- `express-validator` for request validation
+* Node.js
+* Express
+* MongoDB Atlas + Mongoose
+* JWT Authentication
+* OpenRouter API (AI suggestions)
+* express-validator
+
+---
 
 ## Project Structure
 
-```text
+```
 src/
   config/        # database connection
   controllers/   # request/response handlers
@@ -33,67 +40,107 @@ src/
   server.js      # app startup
 ```
 
-## Setup Steps
+---
 
-1. Install dependencies:
-   - `npm install`
-2. Create your env file:
-   - copy `.env.example` to `.env`
-3. Set valid values in `.env` (especially Atlas URI and JWT secret).
-4. Start server:
-   - dev: `npm run dev`
-   - prod: `npm start`
+## Architecture Decisions
+
+* **Layered Architecture**: The project is structured into controllers, services, and models to separate concerns. Controllers handle HTTP logic, services manage business logic, and models define schemas.
+* **JWT Authentication**: Used for stateless and scalable authentication.
+* **MongoDB**: Chosen for its flexible schema and ease of scaling.
+* **Service Layer**: Keeps controllers lightweight and improves maintainability and testability.
+
+---
+
+## Setup (Run Locally)
+
+### Backend
+
+```bash
+npm install
+```
+
+Create `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Start server:
+
+```bash
+npm run dev   # development
+npm start     # production
+```
+
+---
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
 
 ## Environment Variables
 
 See `.env.example`.
 
-- `PORT` - API port (default: `5000`)
-- `MONGO_URI` - MongoDB Atlas connection string
-- `JWT_SECRET` - secret used to sign/verify JWTs
-- `OPENROUTER_API_KEY` - OpenRouter API key for AI suggestions
-- `OPENROUTER_MODEL` - model name (default: `openai/gpt-3.5-turbo`)
+### Example `.env`
 
-Security notes:
-- Never commit `.env`.
-- Never expose `MONGO_URI`, `JWT_SECRET`, or `OPENROUTER_API_KEY` in client code.
+```
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_secret_key
+OPENROUTER_API_KEY=your_api_key
+OPENROUTER_MODEL=openai/gpt-3.5-turbo
+```
+
+**Security Notes:**
+
+* Never commit `.env`
+* Never expose secrets in frontend code
+
+---
 
 ## API Endpoints
 
-Base URL: `/api`
+### Base URL: `/api`
 
 ### Auth
 
-- `POST /api/auth/signup`
-- `POST /api/auth/login`
+* POST `/api/auth/signup`
+* POST `/api/auth/login`
 
 ### Tasks (JWT required)
 
-- `GET /api/tasks` (supports `status`, `priority`, `tags`, `search`)
-- `POST /api/tasks`
-- `GET /api/tasks/:id`
-- `PATCH /api/tasks/:id`
-- `DELETE /api/tasks/:id`
-- `PATCH /api/tasks/:id/done`
+* GET `/api/tasks` (supports status, priority, tags, search)
+* POST `/api/tasks`
+* GET `/api/tasks/:id`
+* PATCH `/api/tasks/:id`
+* DELETE `/api/tasks/:id`
+* PATCH `/api/tasks/:id/done`
 
 ### Tags (JWT required)
 
-- `GET /api/tags`
-- `POST /api/tags`
-- `PATCH /api/tags/:id`
-- `DELETE /api/tags/:id`
+* GET `/api/tags`
+* POST `/api/tags`
+* PATCH `/api/tags/:id`
+* DELETE `/api/tags/:id`
 
 ### AI Suggestions (JWT required)
 
-- `POST /api/ai/suggest` with body `{ "title": "Prepare for interview" }`
+* POST `/api/ai/suggest`
 
 ### Health
 
-- `GET /health`
+* GET `/health`
+
+---
 
 ## Error Format
-
-For failures, API returns:
 
 ```json
 {
@@ -102,34 +149,44 @@ For failures, API returns:
 }
 ```
 
+---
+
 ## Deployment
 
 ### Option A: Render
 
-1. Push repository to GitHub.
-2. Create a new Render Web Service from the repo.
-3. Build command: `npm install`
-4. Start command: `npm start`
-5. Add environment variables in Render dashboard:
-   - `PORT` (optional on Render)
-   - `MONGO_URI`
-   - `JWT_SECRET`
-6. Allow your Render backend domain in CORS if needed.
+* Push repo to GitHub
+* Create Web Service on Render
+* Build command: `npm install`
+* Start command: `npm start`
+* Add environment variables in dashboard
 
 ### Option B: Railway
 
-1. Create a new Railway project from GitHub repo.
-2. Configure service and deploy.
-3. Set env vars:
-   - `MONGO_URI`
-   - `JWT_SECRET`
-   - `PORT` (optional)
-4. Verify the deployed API health endpoint.
+* Create project from GitHub
+* Configure service and deploy
+* Add environment variables
 
-### Database: MongoDB Atlas
+---
 
-1. Create an Atlas cluster.
-2. Create DB user and password.
-3. Add network access rule (IP allowlist).
-4. Copy connection string into `MONGO_URI`.
-5. Use the deployed backend URL for live API consumption.
+## Database (MongoDB Atlas)
+
+* Create cluster
+* Create DB user
+* Allow network access
+* Add connection string to `MONGO_URI`
+
+---
+
+## Known Issues / Limitations
+
+* Initial API response may be slow due to Render cold starts
+* Subtasks are parsed from description text instead of structured storage
+* No pagination implemented yet (may affect performance at scale)
+
+---
+
+## Notes
+
+* All user data is isolated using JWT-based authentication and userId filtering
+* Designed with scalability and maintainability in mind
